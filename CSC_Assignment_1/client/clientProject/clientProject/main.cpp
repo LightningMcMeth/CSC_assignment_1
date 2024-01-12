@@ -3,6 +3,58 @@
 #include <Ws2tcpip.h>
 // Linking the library needed for network communication
 #pragma comment(lib, "ws2_32.lib")
+
+class ClientServer {
+public:
+
+	ClientServer(WSADATA wsaD, PCWSTR Ip, SOCKET socket, sockaddr_in addr) 
+		: wsaData(wsaD), serverIp(Ip), clientSocket(socket), serverAddr(addr) {}
+
+	int connectServer() {
+
+		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+		{
+			std::cerr << "WSAStartup failed" << std::endl;
+			return 1;
+		}
+
+		if (clientSocket == INVALID_SOCKET)
+		{
+			std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
+			WSACleanup();
+			return 1;
+		}
+
+		serverAddr.sin_family = AF_INET;
+		serverAddr.sin_port = htons(port);
+		InetPton(AF_INET, serverIp, &serverAddr.sin_addr);
+
+		if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
+		{
+			std::cerr << "Connect failed with error: " << WSAGetLastError() << std::endl;
+			closesocket(clientSocket);
+			WSACleanup();
+
+			return 1;
+		}
+
+	}
+
+	int disconnectServer() {
+		return 0;
+	}
+
+
+
+private:
+	WSADATA wsaData;
+	PCWSTR serverIp;
+	SOCKET clientSocket;
+	sockaddr_in serverAddr;
+	int port = 12345;
+
+};
+
 int main()
 {
 	// Initialize Winsock
@@ -26,6 +78,7 @@ int main()
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_port = htons(port);
 	InetPton(AF_INET, serverIp, &serverAddr.sin_addr);
+
 	// Connect to the server
 	if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
 	{
