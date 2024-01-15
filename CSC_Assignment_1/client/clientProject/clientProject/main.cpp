@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cstring>
+#include <string>
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 // Linking the library needed for network communication
@@ -43,8 +45,9 @@ public:
 
 	}
 
-	int disconnectServer() {
-		return 0;
+	void sendMessage(const char* message) {
+
+		send(clientSocket, message, (int)strlen(message), 0);
 	}
 
 	SOCKET& getSocket() {
@@ -71,50 +74,17 @@ private:
 
 int main()
 {	
-	/*
-	// Initialize Winsock
-	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-	{
-		std::cerr << "WSAStartup failed" << std::endl;
-		return 1;
-	}
-
-	int port = 12345;
-	PCWSTR serverIp = L"127.0.0.1";
-	SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (clientSocket == INVALID_SOCKET)
-	{
-		std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
-		WSACleanup();
-		return 1;
-	}
-	sockaddr_in serverAddr;
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(port);
-	InetPton(AF_INET, serverIp, &serverAddr.sin_addr);
-	*/
-
 	//GAMER
 	ClientServer server(L"127.0.0.1");
 	server.connectServer();
+	
+	std::string userMessage = "cheese";
 
-	/*
-	auto testAddressVar = server.getAddress();
+	std::cout << "Send a message: ";
+	std::getline(std::cin, userMessage);
 
-	// Connect to the server
-	if (connect(server.getSocket(), reinterpret_cast<const sockaddr*>(&testAddressVar), sizeof(server.getAddress())) == SOCKET_ERROR)
-	{
-		std::cerr << "Connect failed with error: " << WSAGetLastError() << std::endl;
-		closesocket(server.getSocket());
-		WSACleanup();
-		return 1;
-	}*/
+	server.sendMessage(userMessage.c_str());
 
-
-	// Send data to the server
-	const char* message = "Hello, server! How are you?";
-	send(server.getSocket(), message, (int)strlen(message), 0);
 	// Receive the response from the server
 	char buffer[1024];
 	memset(buffer, 0, 1024);
