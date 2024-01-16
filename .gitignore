@@ -2,6 +2,7 @@
 *.suo
 *.user
 *.userprefs
+*.vs
 
 CSC_Assignment_1/client/clientProject/x64
 CSC_Assignment_1/client/clientProject/clientProject/x64

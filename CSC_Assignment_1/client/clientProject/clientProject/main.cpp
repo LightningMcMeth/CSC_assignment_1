@@ -3,7 +3,7 @@
 #include <string>
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
-// Linking the library needed for network communication
+
 #pragma comment(lib, "ws2_32.lib")
 
 class ClientServer {
@@ -12,12 +12,13 @@ public:
 	ClientServer(PCWSTR Ip) 
 		: serverIp(Ip) {}
 
-	int connectServer() {
+
+	void connectServer() {
 
 		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		{
 			std::cerr << "WSAStartup failed" << std::endl;
-			return 1;
+			return;
 		}
 
 		clientSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -26,7 +27,7 @@ public:
 		{
 			std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
 			WSACleanup();
-			return 1;
+			return;
 		}
 
 		serverAddr.sin_family = AF_INET;
@@ -40,15 +41,29 @@ public:
 			closesocket(clientSocket);
 			WSACleanup();
 
-			return 1;
+			return;
 		}
 
 	}
 
-	void sendMessage(const char* message) {
+
+	void sendData(const char* message) {
 
 		send(clientSocket, message, (int)strlen(message), 0);
 	}
+
+	void receiveData() {
+
+		char buffer[1024];
+		memset(buffer, 0, 1024);
+
+		int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+		if (bytesReceived > 0)
+		{
+			std::cout << "Received from server: " << buffer << std::endl;
+		}
+	}
+
 
 	SOCKET& getSocket() {
 		return clientSocket;
@@ -72,28 +87,60 @@ private:
 
 };
 
+class UI {
+public:
+
+	std::string processInput() {
+
+		std::cout << '\n' << "Enter a command: ";
+
+		std::cin >> commandType >> filename;
+
+		if (commandType == "MSG") {
+
+			std::string userMessage = "";
+
+			std::cin.ignore();
+			std::cout << "Send a message: ";
+			std::getline(std::cin, userMessage);
+
+			return userMessage;
+		}
+		else {
+
+			return "";
+		}
+	}
+
+	std::string enterMessage() {
+
+		std::string userMessage;
+
+		std::cout << "\n\nEnter message: ";
+		std::getline(std::cin, userMessage);
+
+	}
+
+
+private:
+	std::string commandType;
+	std::string filename;
+};
+
 int main()
 {	
-	//GAMER
 	ClientServer server(L"127.0.0.1");
+	UI UI;
+	std::string commandType, filename, userMessage;
+
 	server.connectServer();
-	
-	std::string userMessage = "cheese";
 
-	std::cout << "Send a message: ";
-	std::getline(std::cin, userMessage);
+	std::string userMsg = UI.processInput();
+	const char* response = userMsg.c_str();
 
-	server.sendMessage(userMessage.c_str());
+	server.sendData(response);
 
-	// Receive the response from the server
-	char buffer[1024];
-	memset(buffer, 0, 1024);
-	int bytesReceived = recv(server.getSocket(), buffer, sizeof(buffer), 0);
-	if (bytesReceived > 0)
-	{
-		std::cout << "Received from server: " << buffer << std::endl;
-	}
-	// Clean up
+	server.receiveData();
 	
 	return 0;
 }
