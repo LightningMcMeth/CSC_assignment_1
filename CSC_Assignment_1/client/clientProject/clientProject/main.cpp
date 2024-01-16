@@ -18,6 +18,7 @@ public:
 		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		{
 			std::cerr << "WSAStartup failed" << std::endl;
+
 			return;
 		}
 
@@ -27,6 +28,7 @@ public:
 		{
 			std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
 			WSACleanup();
+
 			return;
 		}
 
@@ -94,6 +96,7 @@ public:
 
 		std::cout << '\n' << "Enter a command: ";
 
+		//this part is goofy because the program will not continue execution unless both of the arguments are filled.
 		std::cin >> commandType >> filename;
 
 		if (commandType == "MSG") {
@@ -135,12 +138,16 @@ int main()
 
 	server.connectServer();
 
-	std::string userMsg = UI.processInput();
-	const char* response = userMsg.c_str();
+	//const char* response = UI.processInput().c_str();   <--- this line creates a dangling pointer error. Why???
 
-	server.sendData(response);
+	while (true) {
 
-	server.receiveData();
+		std::string userMsg = UI.processInput();
+		const char* response = userMsg.c_str();
+
+		server.sendData(response);
+		server.receiveData();
+	}
 	
 	return 0;
 }

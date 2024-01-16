@@ -116,9 +116,13 @@ int main()
 	
 	server.initializeServer();
 	server.bindServer();
-	
 	server.listenToConnections();
 	server.acceptConnection();
+	
+	while (true) {
+
+		server.recieveData();
+	}
 
 	server.recieveData();
 
