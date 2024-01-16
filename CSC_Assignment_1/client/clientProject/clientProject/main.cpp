@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+#include <vector>
 #include <cstring>
 #include <string>
 #include <WinSock2.h>
@@ -17,7 +19,7 @@ public:
 
 		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		{
-			std::cerr << "WSAStartup failed" << std::endl;
+			std::cerr << "WSAStartup failed" << '\n';
 
 			return;
 		}
@@ -26,7 +28,7 @@ public:
 
 		if (clientSocket == INVALID_SOCKET)
 		{
-			std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
+			std::cerr << "Error creating socket: " << WSAGetLastError() << '\n';
 			WSACleanup();
 
 			return;
@@ -39,7 +41,7 @@ public:
 
 		if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
 		{
-			std::cerr << "Connect failed with error: " << WSAGetLastError() << std::endl;
+			std::cerr << "Connect failed with error: " << WSAGetLastError() << '\n';
 			closesocket(clientSocket);
 			WSACleanup();
 
@@ -62,7 +64,7 @@ public:
 		int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
 		if (bytesReceived > 0)
 		{
-			std::cout << "Received from server: " << buffer << std::endl;
+			std::cout << "Received from server: " << buffer << '\n';
 		}
 	}
 
@@ -92,12 +94,22 @@ private:
 class UI {
 public:
 
+	void runCommLoop(ClientServer& server) {
+
+		while (true) {
+
+			std::string userMsg = processInput();
+			const char* response = userMsg.c_str();
+
+			server.sendData(response);
+			server.receiveData();
+		}
+	}
+
 	std::string processInput() {
 
-		std::cout << '\n' << "Enter a command: ";
-
-		//this part is goofy because the program will not continue execution unless both of the arguments are filled.
-		std::cin >> commandType >> filename;
+		std::cout << "\nEnter a command: ";
+		std::cin >> commandType;
 
 		if (commandType == "MSG") {
 
@@ -109,11 +121,28 @@ public:
 
 			return userMessage;
 		}
+		else if (commandType == "GET") {
+
+			std::cin.ignore();
+			std::cout << "\nEnter filepath: ";
+			std::cin >> filename;
+
+			return commandType + " " + filename;
+
+			//passes command type and filename to server.
+		}
+		else if (commandType == "PUT") {
+
+
+		}
 		else {
+
+			std::cerr << "\n\n!!!Command not recognised!!!\n\n";
 
 			return "";
 		}
 	}
+
 
 	std::string enterMessage() {
 
@@ -134,20 +163,12 @@ int main()
 {	
 	ClientServer server(L"127.0.0.1");
 	UI UI;
-	std::string commandType, filename, userMessage;
 
 	server.connectServer();
 
-	//const char* response = UI.processInput().c_str();   <--- this line creates a dangling pointer error. Why???
-
-	while (true) {
-
-		std::string userMsg = UI.processInput();
-		const char* response = userMsg.c_str();
-
-		server.sendData(response);
-		server.receiveData();
-	}
+	UI.runCommLoop(server);
 	
 	return 0;
 }
+
+//const char* response = UI.processInput().c_str();   <--- this line creates a dangling pointer error. Why???

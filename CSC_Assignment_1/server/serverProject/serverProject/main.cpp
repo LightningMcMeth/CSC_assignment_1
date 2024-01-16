@@ -1,7 +1,50 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <cstring>
+#include <string>
 #include <WinSock2.h>
 
 #pragma comment(lib, "ws2_32.lib")
+
+class FileManager {
+public:
+
+	const char* readFile(std::string& filename) {
+
+		std::ifstream file(filename);
+
+		if (!file.is_open()) {
+
+			std::cerr << "\n\n!!!Error opening file!!!\n\n";
+			return "";
+		}
+
+		char buffer[1024];
+		memset(buffer, 0, 1024);
+
+		std::string line;
+
+		int i = 0;
+		while (getline(file, line)) {
+
+			for (char& ch : line) {
+
+				buffer[i] = ch;
+				i++;
+			}
+		}
+
+		file.close();
+
+		return buffer;
+	}
+
+private:
+	std::string filename;
+};
+
 
 class Server {
 public:
@@ -10,7 +53,7 @@ public:
 
 		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		{
-			std::cerr << "WSAStartup failed" << std::endl;
+			std::cerr << "WSAStartup failed" << '\n';
 
 			return;
 		}
@@ -19,7 +62,7 @@ public:
 
 		if (serverSocket == INVALID_SOCKET)
 		{
-			std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
+			std::cerr << "Error creating socket: " << WSAGetLastError() << '\n';
 			WSACleanup();
 
 			return;
@@ -37,7 +80,7 @@ public:
 
 		if (bind(serverSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
 		{
-			std::cerr << "Bind failed with error: " << WSAGetLastError() << std::endl;
+			std::cerr << "Bind failed with error: " << WSAGetLastError() << '\n';
 			closesocket(serverSocket);
 			WSACleanup();
 
@@ -52,13 +95,13 @@ public:
 
 		if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
 		{
-			std::cerr << "Listen failed with error: " << WSAGetLastError() << std::endl;
+			std::cerr << "Listen failed with error: " << WSAGetLastError() << '\n';
 			closesocket(serverSocket);
 			WSACleanup();
 
 			return;
 		}
-		std::cout << "Server listening on port " << port << std::endl;
+		std::cout << "Server listening on port " << port << '\n';
 	}
 
 
@@ -67,7 +110,7 @@ public:
 		clientSocket = accept(serverSocket, nullptr, nullptr);
 		if (clientSocket == INVALID_SOCKET)
 		{
-			std::cerr << "Accept failed with error: " << WSAGetLastError() << std::endl;
+			std::cerr << "Accept failed with error: " << WSAGetLastError() << '\n';
 			closesocket(serverSocket);
 			WSACleanup();
 
@@ -76,25 +119,38 @@ public:
 	}
 
 
-	void recieveData() {
+	void recieveData(FileManager& fileManager) {
 
 		char buffer[1024];
 		memset(buffer, 0, 1024);
 		int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
 		if (bytesReceived > 0)
 		{
-			std::cout << "Received data: " << buffer << std::endl;
+			std::cout << "Received data: " << buffer << '\n';
 
-			const char* response = "Hello, client! This is the server.";
+			std::stringstream arguments(buffer);
+			std::string commandType, filename;	//might move these to class variables since they will constantly be in use
+
+			arguments >> commandType >> filename;
+
+			if (commandType == "GET") {
+
+				const char* gamer = fileManager.readFile(filename);
+				send(clientSocket, gamer, (int)strlen(gamer), 0);
+			}
+
+			const char* response = "\nRoger that\n";
 			send(clientSocket, response, (int)strlen(response), 0);
 		}
 
 	}
 
 
-	void sendData(){
-	
+	void sendData(const char* buffer){
+		
+		send(clientSocket, buffer, (int)strlen(buffer), 0);
 	}
+
 
 	~Server() {
 		closesocket(clientSocket);
@@ -110,9 +166,11 @@ private:
 	sockaddr_in serverAddr;
 };
 
+
 int main()
 {
 	Server server;
+	FileManager fileManager;
 	
 	server.initializeServer();
 	server.bindServer();
@@ -121,10 +179,10 @@ int main()
 	
 	while (true) {
 
-		server.recieveData();
+		server.recieveData(fileManager);
 	}
 
-	server.recieveData();
+	//server.recieveData();
 
 	return 0;
 }
