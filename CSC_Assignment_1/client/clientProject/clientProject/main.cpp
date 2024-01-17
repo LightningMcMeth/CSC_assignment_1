@@ -8,6 +8,49 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
+class FileManager {
+public:
+
+	std::vector<char> readFile(std::string& filename) {
+
+		std::ifstream file("clientfiles\\" + filename, std::ios::binary);
+
+		if (!file.is_open()) {
+
+			std::cerr << "\n\n!!!Error opening file!!!\n\n";
+
+			std::vector<char> empty;
+			return empty;
+		}
+
+		file.seekg(0, std::ios::end);
+		bufferSize = file.tellg();
+		file.seekg(0, std::ios::beg);
+
+		std::vector<char> buffer(bufferSize, 0);
+
+		file.read(buffer.data(), bufferSize);
+		file.close();
+
+		return buffer;
+	}
+
+	const std::streamsize getBufferSize() {
+		return bufferSize;
+	}
+
+	void writeFile(std::string& filename, std::vector<char>& buffer, int bufferSize) {
+
+		std::ofstream file("clientfiles\\" + filename, std::ios::binary);
+
+		file.write(buffer.data(), bufferSize);
+	}
+
+private:
+	std::streamsize bufferSize;
+};
+
+
 class ClientServer {
 public:
 
@@ -56,18 +99,34 @@ public:
 		send(clientSocket, message, (int)strlen(message), 0);
 	}
 
-	void receiveData() {
 
-		char buffer[1024];
-		memset(buffer, 0, 1024);
+	void putFile(FileManager& fileManager, std::string& filename) {
 
-		int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
-		if (bytesReceived > 0)
-		{
-			std::cout << "Received from server: " << buffer << '\n';
-		}
+		const std::vector<char> fileData = fileManager.readFile(filename);
+
+		auto bufferSize = fileManager.getBufferSize();
+		send(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+
+		send(clientSocket, fileData.data(), (int)bufferSize, 0);
 	}
 
+
+	void receiveData(std::string& filename, FileManager& fileManager) {
+
+		std::streamsize bufferSize;
+		recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+
+		std::vector<char> buffer(bufferSize, 0);
+
+		int bytesReceived = recv(clientSocket, buffer.data(), (int)bufferSize, 0);
+		if (bytesReceived > 0)
+		{
+
+			fileManager.writeFile(filename, buffer, (int)bufferSize);
+
+			std::cout << "response recieved!\n";
+		}
+	}
 
 	SOCKET& getSocket() {
 		return clientSocket;
@@ -94,7 +153,7 @@ private:
 class UI {
 public:
 
-	void runCommLoop(ClientServer& server) {
+	void runCommLoop(ClientServer& server, FileManager& fileManager) {
 
 		while (true) {
 
@@ -102,11 +161,18 @@ public:
 			const char* response = userMsg.c_str();
 
 			server.sendData(response);
-			server.receiveData();
+
+			if (commandType == "PUT") {		//refactor this mess
+				
+				server.putFile(fileManager, filename);
+			}
+			else {
+				server.receiveData(filename, fileManager);
+			}
 		}
 	}
 
-	std::string processInput() {
+	std::string processInput() {	//refactor this entire mess
 
 		std::cout << "\nEnter a command: ";
 		std::cin >> commandType;
@@ -129,11 +195,14 @@ public:
 
 			return commandType + " " + filename;
 
-			//passes command type and filename to server.
 		}
 		else if (commandType == "PUT") {
 
+			std::cin.ignore();
+			std::cout << "\nEnter filepath: ";
+			std::cin >> filename;
 
+			return commandType + " " + filename;
 		}
 		else {
 
@@ -153,20 +222,25 @@ public:
 
 	}
 
+	const std::string getFilename() {
+		return filename;
+	}
+
 
 private:
 	std::string commandType;
 	std::string filename;
 };
 
-int main()
+int main()	//clientfiles
 {	
 	ClientServer server(L"127.0.0.1");
 	UI UI;
+	FileManager fileManager;
 
 	server.connectServer();
 
-	UI.runCommLoop(server);
+	UI.runCommLoop(server, fileManager);
 	
 	return 0;
 }

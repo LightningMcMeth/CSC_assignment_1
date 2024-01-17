@@ -8,41 +8,46 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-class FileManager {
+class FileManager {	//serverstorage
 public:
 
-	const char* readFile(std::string& filename) {
+	std::vector<char> readFile(std::string& filename) {
 
-		std::ifstream file(filename);
+		std::ifstream file("serverstorage\\" + filename, std::ios::binary);
 
 		if (!file.is_open()) {
 
 			std::cerr << "\n\n!!!Error opening file!!!\n\n";
-			return "";
+
+			std::vector<char> empty;
+			return empty;
 		}
 
-		char buffer[1024];
-		memset(buffer, 0, 1024);
+		file.seekg(0, std::ios::end);
+		bufferSize = file.tellg();
+		file.seekg(0, std::ios::beg);
 
-		std::string line;
+		std::vector<char> buffer(bufferSize, 0);
 
-		int i = 0;
-		while (getline(file, line)) {
-
-			for (char& ch : line) {
-
-				buffer[i] = ch;
-				i++;
-			}
-		}
-
+		file.read(buffer.data(), bufferSize);
 		file.close();
 
 		return buffer;
 	}
 
+	const std::streamsize getBufferSize() {
+		return bufferSize;
+	}
+
+	void writeFile(std::string& filename, std::vector<char>& buffer, int bufferSize) {	//cast bufferSize to int before passing it into this method
+
+		std::ofstream file("serverstorage\\" + filename, std::ios::binary);
+
+		file.write(buffer.data(), bufferSize);
+	}
+
 private:
-	std::string filename;
+	std::streamsize bufferSize;
 };
 
 
@@ -101,7 +106,7 @@ public:
 
 			return;
 		}
-		std::cout << "Server listening on port " << port << '\n';
+		std::cout << "\nServer listening on port " << port << '\n';
 	}
 
 
@@ -118,6 +123,31 @@ public:
 		}
 	}
 
+	void getFile(FileManager& fileManager, std::string& filename) {
+
+		const std::vector<char> fileData = fileManager.readFile(filename);
+
+		auto bufferSize = fileManager.getBufferSize();
+		send(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+
+		send(clientSocket, fileData.data(), (int)bufferSize, 0);
+	}
+
+	void putFile(FileManager& fileManager, std::string& filename) {
+
+		std::streamsize bufferSize;
+		recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+
+		std::vector<char> buffer(bufferSize, 0);
+		int bytesReceived = recv(clientSocket, buffer.data(), (int)bufferSize, 0);
+		if (bytesReceived > 0)
+		{
+
+			fileManager.writeFile(filename, buffer, (int)bufferSize);
+
+			std::cout << "File created!\n";
+		}
+	}
 
 	void recieveData(FileManager& fileManager) {
 
@@ -126,7 +156,7 @@ public:
 		int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
 		if (bytesReceived > 0)
 		{
-			std::cout << "Received data: " << buffer << '\n';
+			std::cout << ">>> " << buffer << '\n';
 
 			std::stringstream arguments(buffer);
 			std::string commandType, filename;	//might move these to class variables since they will constantly be in use
@@ -135,12 +165,15 @@ public:
 
 			if (commandType == "GET") {
 
-				const char* gamer = fileManager.readFile(filename);
-				send(clientSocket, gamer, (int)strlen(gamer), 0);
+				getFile(fileManager, filename);
+			}
+			else if (commandType == "PUT") {
+
+				putFile(fileManager, filename);
 			}
 
-			const char* response = "\nRoger that\n";
-			send(clientSocket, response, (int)strlen(response), 0);
+			//const char* response = "\nRoger that\n";
+			//send(clientSocket, response, (int)strlen(response), 0);
 		}
 
 	}
