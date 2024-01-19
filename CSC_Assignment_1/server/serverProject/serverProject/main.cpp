@@ -13,7 +13,8 @@ public:
 
 	std::vector<char> readFile(std::string& filename) {
 
-		std::ifstream file("serverstorage\\" + filename, std::ios::binary);
+		std::string relativePath = "serverstorage\\" + filename;
+		std::ifstream file(relativePath, std::ios::binary);
 
 		if (!file.is_open()) {
 
@@ -41,7 +42,8 @@ public:
 
 	void writeFile(std::string& filename, std::vector<char>& buffer, int bufferSize) {
 
-		std::ofstream file("serverstorage\\" + filename, std::ios::binary);
+		std::string relativePath = "serverstorage\\" + filename;
+		std::ofstream file(relativePath, std::ios::binary);
 
 		file.write(buffer.data(), bufferSize);
 	}
@@ -151,7 +153,7 @@ public:
 
 		std::streamsize bufferSize;
 		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
-		if (bytesReceived == 8) {
+		if (bytesReceived == 0) {
 
 			const char* response = "\nError creating file.\n";
 			send(clientSocket, response, (int)strlen(response), 0);
@@ -188,6 +190,7 @@ public:
 	}
 
 	void deleteFile(std::string& filename) {
+
 
 		std::string relativePath = "serverstorage\\" + filename;
 		std::wstring wstrRelativePath = toWideString(relativePath);
@@ -282,7 +285,7 @@ public:
 		std::string relativePath;
 
 		if (dirname == "-") {
-			
+
 			relativePath = "serverstorage\\*";
 		}
 		else {
@@ -339,7 +342,7 @@ public:
 				deleteFile(filename);
 			}
 			else if (commandType == "INFO") {
-				
+
 				viewFileInfo(filename);
 			}
 			else if (commandType == "LIST") {
@@ -355,8 +358,8 @@ public:
 	}
 
 
-	void sendData(const char* buffer){
-		
+	void sendData(const char* buffer) {
+
 		send(clientSocket, buffer, (int)strlen(buffer), 0);
 	}
 
@@ -394,7 +397,7 @@ int main()
 	Program program;
 
 	server.setupAndConnect();
-	
+
 	program.runCommLoop(server, fileManager);
 
 	return 0;

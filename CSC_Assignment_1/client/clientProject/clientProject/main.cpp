@@ -8,12 +8,13 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-class FileManager {
+class FileManager {	//C:\\Users\\markh\\OneDrive\\Documents\Gamer repositories\CSC_ASSIGNMENTS\CSC_assignment_1\CSC_Assignment_1\client\clientProject\clientProject\clientfiles
 public:
 
 	std::vector<char> readFile(std::string& filename) {
 
-		std::ifstream file("clientfiles\\" + filename, std::ios::binary);
+		std::string relativePath = "clientfiles\\" + filename;
+		std::ifstream file(relativePath, std::ios::binary);
 
 		if (!file.is_open()) {
 
@@ -41,7 +42,8 @@ public:
 
 	void writeFile(std::string& filename, std::vector<char>& buffer, int bufferSize) {
 
-		std::ofstream file("clientfiles\\" + filename, std::ios::binary);
+		std::string relativePath = "clientfiles\\" + filename;
+		std::ofstream file(relativePath, std::ios::binary);
 
 		file.write(buffer.data(), bufferSize);
 	}
@@ -54,7 +56,7 @@ private:
 class ClientServer {
 public:
 
-	ClientServer(PCWSTR Ip) 
+	ClientServer(PCWSTR Ip)
 		: serverIp(Ip) {}
 
 
@@ -122,7 +124,7 @@ public:
 
 		std::streamsize bufferSize;
 		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
-		if (bytesReceived == 8) {	//it always sends 8 bytes. I haven't figured out why yet.
+		if (bytesReceived == 0) {	//it always sends 8 bytes. I haven't figured out why yet.
 
 			std::cerr << "\nError getting file.\n";
 			return;
@@ -214,7 +216,7 @@ public:
 			server.sendArgs(response);
 
 			if (commandType == "PUT") {
-				
+
 				server.putFile(fileManager, filename);
 			}
 			else if (commandType == "GET") {
@@ -246,7 +248,7 @@ private:
 };
 
 int main()
-{	
+{
 	ClientServer server(L"127.0.0.1");
 	UI UI;
 	FileManager fileManager;
@@ -254,7 +256,7 @@ int main()
 	server.connectServer();
 
 	UI.runCommLoop(server, fileManager);
-	
+
 	return 0;
 }
 
