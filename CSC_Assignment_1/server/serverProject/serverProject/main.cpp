@@ -8,7 +8,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-class FileManager {	//serverstorage
+class FileManager {
 public:
 
 	std::vector<char> readFile(std::string& filename) {
@@ -39,7 +39,7 @@ public:
 		return bufferSize;
 	}
 
-	void writeFile(std::string& filename, std::vector<char>& buffer, int bufferSize) {	//cast bufferSize to int before passing it into this method
+	void writeFile(std::string& filename, std::vector<char>& buffer, int bufferSize) {
 
 		std::ofstream file("serverstorage\\" + filename, std::ios::binary);
 
@@ -136,7 +136,13 @@ public:
 		const std::vector<char> fileData = fileManager.readFile(filename);
 
 		std::streamsize bufferSize = fileManager.getBufferSize();
-		send(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+		int bytesSent = send(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+
+		if (WSAGetLastError() != 0) {
+
+			std::cerr << "\nError getting file.\n";
+			return;
+		}
 
 		send(clientSocket, fileData.data(), (int)bufferSize, 0);
 	}
@@ -144,10 +150,17 @@ public:
 	void putFile(FileManager& fileManager, std::string& filename) {
 
 		std::streamsize bufferSize;
-		recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+		if (bytesReceived == 8) {
+
+			const char* response = "\nError creating file.\n";
+			send(clientSocket, response, (int)strlen(response), 0);
+
+			return;
+		}
 
 		std::vector<char> buffer(bufferSize, 0);
-		int bytesReceived = recv(clientSocket, buffer.data(), (int)bufferSize, 0);
+		bytesReceived = recv(clientSocket, buffer.data(), (int)bufferSize, 0);
 		if (bytesReceived > 0)
 		{
 
@@ -155,6 +168,7 @@ public:
 
 			std::string strResponse = "\n\nFile " + filename + " created.\n\n";
 			auto response = strResponse.c_str();
+
 			send(clientSocket, response, (int)strlen(response), 0);
 		}
 		else {
@@ -200,6 +214,7 @@ public:
 
 		BY_HANDLE_FILE_INFORMATION fileInfo = {};
 		const char* errorMsg = "\nError handling file.\n";
+		int errCode = 0;
 
 		std::string relativePath = "serverstorage\\" + filename;
 		std::wstring wstrRelativePath = toWideString(relativePath);
@@ -207,16 +222,20 @@ public:
 		HANDLE fileHandle = CreateFile(wstrRelativePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (fileHandle == INVALID_HANDLE_VALUE) {
 
-			std::cerr << "File handle err code: " << GetLastError() << '\n';
-			//send(clientSocket, errorMsg, (int)strlen(errorMsg), 0);
+			errCode = GetLastError();
+			std::cerr << "File handle err code: " << errCode << '\n';
 		}
 
 		if (!GetFileInformationByHandle(fileHandle, &fileInfo)) {
 
-			std::cerr << "Retrieving file info err code: " << GetLastError() << '\n';
+			errCode = GetLastError();
+			std::cerr << "Retrieving file info err code: " << errCode << '\n';
+		}
+
+		if (errCode != 0) {
+
 			send(clientSocket, errorMsg, (int)strlen(errorMsg), 0);
-			//either this piece of code throws an error, or the previous piece of code throws and error and therefore an error is thrown here.
-			//I only need 1 error message going back to the server, so perhaps leaving it only here will do the trick.
+			return;
 		}
 
 		CloseHandle(fileHandle);
@@ -300,7 +319,7 @@ public:
 		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
 		if (bytesReceived > 0)
 		{
-			std::cout << ">>> " << buffer.data() << '\n';
+			std::cout << "\nuser >>> " << buffer.data() << '\n';
 
 			std::stringstream arguments(buffer.data());
 			std::string commandType, filename;

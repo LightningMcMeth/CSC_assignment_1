@@ -121,11 +121,16 @@ public:
 	void receiveData(std::string& filename, FileManager& fileManager) {
 
 		std::streamsize bufferSize;
-		recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+		if (bytesReceived == 8) {	//it always sends 8 bytes. I haven't figured out why yet.
+
+			std::cerr << "\nError getting file.\n";
+			return;
+		}
 
 		std::vector<char> buffer(bufferSize, 0);
 
-		int bytesReceived = recv(clientSocket, buffer.data(), (int)bufferSize, 0);
+		bytesReceived = recv(clientSocket, buffer.data(), (int)bufferSize, 0);
 		if (bytesReceived > 0)
 		{
 
