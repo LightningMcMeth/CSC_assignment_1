@@ -94,7 +94,7 @@ public:
 	}
 
 
-	void sendData(const char* message) {
+	void sendArgs(const char* message) {
 
 		send(clientSocket, message, (int)strlen(message), 0);
 	}
@@ -108,6 +108,13 @@ public:
 		send(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
 
 		send(clientSocket, fileData.data(), (int)bufferSize, 0);
+
+		std::vector<char> confirmationBuffer(128, 0);
+		int bytesReceived = recv(clientSocket, confirmationBuffer.data(), confirmationBuffer.size(), 0);
+		if (bytesReceived > 0) {
+
+			std::cout << confirmationBuffer.data();
+		}
 	}
 
 
@@ -124,8 +131,40 @@ public:
 
 			fileManager.writeFile(filename, buffer, (int)bufferSize);
 
-			std::cout << "response recieved!\n";
+			std::cout << "File created.\n";
 		}
+	}
+
+	void recieveMessage() {
+
+		std::vector<char> buffer(128, 0);
+		recv(clientSocket, buffer.data(), buffer.size(), 0);
+
+		std::cout << buffer.data();
+
+	}
+
+	void recieveFileInfo() {
+
+		std::vector<char> buffer(256, 0); //really don't think I need a bigger buffer here, it's just info about a file.
+
+		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
+		if (bytesReceived > 0) {
+
+			std::cout << buffer.data();
+		}
+		else {
+
+			std::cout << "\nFile not found.\n";
+		}
+	}
+
+	void recieveListInfo() {
+
+		std::vector<char> buffer(1024, 0);
+		recv(clientSocket, buffer.data(), buffer.size(), 0);
+
+		std::cout << '\n' << buffer.data() << "\n";
 	}
 
 	SOCKET& getSocket() {
@@ -157,82 +196,51 @@ public:
 
 		while (true) {
 
-			std::string userMsg = processInput();
+			std::cout << "\nCMD >>>: ";
+			std::cin >> commandType;
+
+			std::cin.ignore();
+			std::cout << "\nPATH >>>: ";
+			std::cin >> filename;
+
+			std::string userMsg = commandType + " " + filename;
 			const char* response = userMsg.c_str();
 
-			server.sendData(response);
+			server.sendArgs(response);
 
-			if (commandType == "PUT") {		//refactor this mess
+			if (commandType == "PUT") {
 				
 				server.putFile(fileManager, filename);
 			}
-			else {
+			else if (commandType == "GET") {
+
 				server.receiveData(filename, fileManager);
 			}
+			else if (commandType == "DELETE") {
+
+				server.recieveMessage();
+			}
+			else if (commandType == "INFO") {
+
+				server.recieveFileInfo();
+			}
+			else if (commandType == "LIST") {
+
+				server.recieveListInfo();
+			}
 		}
-	}
-
-	std::string processInput() {	//refactor this entire mess
-
-		std::cout << "\nEnter a command: ";
-		std::cin >> commandType;
-
-		if (commandType == "MSG") {
-
-			std::string userMessage = "";
-
-			std::cin.ignore();
-			std::cout << "Send a message: ";
-			std::getline(std::cin, userMessage);
-
-			return userMessage;
-		}
-		else if (commandType == "GET") {
-
-			std::cin.ignore();
-			std::cout << "\nEnter filepath: ";
-			std::cin >> filename;
-
-			return commandType + " " + filename;
-
-		}
-		else if (commandType == "PUT") {
-
-			std::cin.ignore();
-			std::cout << "\nEnter filepath: ";
-			std::cin >> filename;
-
-			return commandType + " " + filename;
-		}
-		else {
-
-			std::cerr << "\n\n!!!Command not recognised!!!\n\n";
-
-			return "";
-		}
-	}
-
-
-	std::string enterMessage() {
-
-		std::string userMessage;
-
-		std::cout << "\n\nEnter message: ";
-		std::getline(std::cin, userMessage);
-
 	}
 
 	const std::string getFilename() {
 		return filename;
 	}
 
-
 private:
 	std::string commandType;
 	std::string filename;
 };
 
-int main()	//clientfiles
+int main()
 {	
 	ClientServer server(L"127.0.0.1");
 	UI UI;

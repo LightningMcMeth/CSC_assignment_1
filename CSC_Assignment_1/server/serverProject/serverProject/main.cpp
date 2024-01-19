@@ -123,11 +123,19 @@ public:
 		}
 	}
 
+	void setupAndConnect() {
+
+		initializeServer();
+		bindServer();
+		listenToConnections();
+		acceptConnection();
+	}
+
 	void getFile(FileManager& fileManager, std::string& filename) {
 
 		const std::vector<char> fileData = fileManager.readFile(filename);
 
-		auto bufferSize = fileManager.getBufferSize();
+		std::streamsize bufferSize = fileManager.getBufferSize();
 		send(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
 
 		send(clientSocket, fileData.data(), (int)bufferSize, 0);
@@ -145,21 +153,157 @@ public:
 
 			fileManager.writeFile(filename, buffer, (int)bufferSize);
 
-			std::cout << "File created!\n";
+			std::string strResponse = "\n\nFile " + filename + " created.\n\n";
+			auto response = strResponse.c_str();
+			send(clientSocket, response, (int)strlen(response), 0);
 		}
+		else {
+
+			const char* response = "\nError creating file.\n";
+			send(clientSocket, response, (int)strlen(response), 0);
+		}
+	}
+
+	std::wstring toWideString(std::string& string) {
+
+		int length = MultiByteToWideChar(CP_ACP, 0, string.c_str(), -1, NULL, 0);
+		std::wstring wideString(length, L'\0');
+		MultiByteToWideChar(CP_ACP, 0, string.c_str(), -1, &wideString[0], length);
+
+		return wideString;
+	}
+
+	void deleteFile(std::string& filename) {
+
+		std::string relativePath = "serverstorage\\" + filename;
+		std::wstring wstrRelativePath = toWideString(relativePath);
+
+		bool isDeleted = DeleteFile(wstrRelativePath.c_str());
+		if (isDeleted) {
+
+			std::cout << "\nFile deleted successfully.\n";
+
+			std::string strResponse = "\nFile " + filename + " deleted.\n";
+			auto response = strResponse.c_str();
+
+			send(clientSocket, response, (int)strlen(response), 0);
+		}
+		else {
+
+			const char* response = "\nError deleting file.\n";
+
+			send(clientSocket, response, (int)strlen(response), 0);
+		}
+	}
+
+	void viewFileInfo(std::string& filename) {
+
+		BY_HANDLE_FILE_INFORMATION fileInfo = {};
+		const char* errorMsg = "\nError handling file.\n";
+
+		std::string relativePath = "serverstorage\\" + filename;
+		std::wstring wstrRelativePath = toWideString(relativePath);
+
+		HANDLE fileHandle = CreateFile(wstrRelativePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (fileHandle == INVALID_HANDLE_VALUE) {
+
+			std::cerr << "File handle err code: " << GetLastError() << '\n';
+			//send(clientSocket, errorMsg, (int)strlen(errorMsg), 0);
+		}
+
+		if (!GetFileInformationByHandle(fileHandle, &fileInfo)) {
+
+			std::cerr << "Retrieving file info err code: " << GetLastError() << '\n';
+			send(clientSocket, errorMsg, (int)strlen(errorMsg), 0);
+			//either this piece of code throws an error, or the previous piece of code throws and error and therefore an error is thrown here.
+			//I only need 1 error message going back to the server, so perhaps leaving it only here will do the trick.
+		}
+
+		CloseHandle(fileHandle);
+
+		std::stringstream fileInfoStream;
+		SYSTEMTIME lastAccessTime, lastWriteTime, creationTime;
+		FileTimeToSystemTime(&fileInfo.ftLastAccessTime, &lastAccessTime);
+		FileTimeToSystemTime(&fileInfo.ftLastWriteTime, &lastWriteTime);
+		FileTimeToSystemTime(&fileInfo.ftCreationTime, &creationTime);
+
+		fileInfoStream << "\n\nLast accessed (d/m/y): " << lastAccessTime.wDay << '/'
+			<< lastAccessTime.wMonth << '/' << lastAccessTime.wYear;
+
+		fileInfoStream << "\nLast modified (d/m/y): " << lastWriteTime.wDay << '/'
+			<< lastWriteTime.wMonth << '/' << lastWriteTime.wYear;
+
+		fileInfoStream << "\nCreated on (d/m/y): " << creationTime.wDay << '/'
+			<< creationTime.wMonth << '/' << creationTime.wYear;
+
+		LARGE_INTEGER fileSize;
+		fileSize.LowPart = fileInfo.nFileSizeLow;
+		fileSize.HighPart = fileInfo.nFileSizeHigh;
+
+		float filesize = fileSize.QuadPart / 1024;
+
+		if (filesize < 1) {
+
+			fileInfoStream << "\nFile size: " << fileSize.QuadPart << " bytes\n";
+		}
+		else {
+
+			fileInfoStream << "\nFile size: " << filesize << " kilobytes\n";
+		}
+
+		std::string fileInfoString = fileInfoStream.str();
+		std::vector<char> buffer(fileInfoString.begin(), fileInfoString.end());
+
+		send(clientSocket, buffer.data(), buffer.size(), 0);
+	}
+
+	void viewListInfo(std::string& dirname) {
+
+		WIN32_FIND_DATA fileData;
+		std::string relativePath;
+
+		if (dirname == "-") {
+			
+			relativePath = "serverstorage\\*";
+		}
+		else {
+			relativePath = "serverstorage\\" + dirname + "\\*";
+		}
+
+		std::wstring wstrRelativePath = toWideString(relativePath);
+
+		HANDLE hFind = FindFirstFile(wstrRelativePath.c_str(), &fileData);
+
+		std::stringstream filenames;
+		//std::vector<std::string> folders;
+
+		if (hFind != INVALID_HANDLE_VALUE) {
+
+			while (FindNextFile(hFind, &fileData) != 0)
+			{
+				std::wstring wstrFilename(fileData.cFileName);
+				std::string filename(wstrFilename.begin(), wstrFilename.end());
+
+				filenames << filename << '\n';
+			}
+		}
+
+		std::string concatenatedNames = filenames.str();
+		std::vector<char> buffer(concatenatedNames.begin(), concatenatedNames.end());
+
+		send(clientSocket, buffer.data(), buffer.size(), 0);
 	}
 
 	void recieveData(FileManager& fileManager) {
 
-		char buffer[1024];
-		memset(buffer, 0, 1024);
-		int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+		std::vector<char> buffer(1024, 0);
+		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
 		if (bytesReceived > 0)
 		{
-			std::cout << ">>> " << buffer << '\n';
+			std::cout << ">>> " << buffer.data() << '\n';
 
-			std::stringstream arguments(buffer);
-			std::string commandType, filename;	//might move these to class variables since they will constantly be in use
+			std::stringstream arguments(buffer.data());
+			std::string commandType, filename;
 
 			arguments >> commandType >> filename;
 
@@ -171,9 +315,22 @@ public:
 
 				putFile(fileManager, filename);
 			}
+			else if (commandType == "DELETE") {
 
-			//const char* response = "\nRoger that\n";
-			//send(clientSocket, response, (int)strlen(response), 0);
+				deleteFile(filename);
+			}
+			else if (commandType == "INFO") {
+				
+				viewFileInfo(filename);
+			}
+			else if (commandType == "LIST") {
+
+				viewListInfo(filename);
+			}
+			else {
+
+				std::cerr << "\nCommand not recognised.\n";
+			}
 		}
 
 	}
@@ -199,23 +356,27 @@ private:
 	sockaddr_in serverAddr;
 };
 
+class Program {
+public:
+
+	void runCommLoop(Server& server, FileManager& fileManager) {
+
+		while (true) {
+
+			server.recieveData(fileManager);
+		}
+	}
+};
 
 int main()
 {
 	Server server;
 	FileManager fileManager;
-	
-	server.initializeServer();
-	server.bindServer();
-	server.listenToConnections();
-	server.acceptConnection();
-	
-	while (true) {
+	Program program;
 
-		server.recieveData(fileManager);
-	}
-
-	//server.recieveData();
+	server.setupAndConnect();
+	
+	program.runCommLoop(server, fileManager);
 
 	return 0;
 }
