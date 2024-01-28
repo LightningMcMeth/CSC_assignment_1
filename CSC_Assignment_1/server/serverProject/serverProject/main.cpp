@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <WinSock2.h>
+#include <thread>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -112,7 +113,7 @@ public:
 	}
 
 
-	void acceptConnection() {
+	SOCKET acceptConnection() {
 
 		clientSocket = accept(serverSocket, nullptr, nullptr);
 		if (clientSocket == INVALID_SOCKET)
@@ -121,8 +122,10 @@ public:
 			closesocket(serverSocket);
 			WSACleanup();
 
-			return;
+			return INVALID_SOCKET;
 		}
+
+		return clientSocket;
 	}
 
 	void setupAndConnect() {
@@ -132,6 +135,11 @@ public:
 		listenToConnections();
 		acceptConnection();
 	}
+
+	SOCKET& getClientSocket() {
+		return clientSocket;
+	}
+
 
 	void getFile(FileManager& fileManager, std::string& filename) {
 
@@ -178,15 +186,6 @@ public:
 			const char* response = "\nError creating file.\n";
 			send(clientSocket, response, (int)strlen(response), 0);
 		}
-	}
-
-	std::wstring toWideString(std::string& string) {
-
-		int length = MultiByteToWideChar(CP_ACP, 0, string.c_str(), -1, NULL, 0);
-		std::wstring wideString(length, L'\0');
-		MultiByteToWideChar(CP_ACP, 0, string.c_str(), -1, &wideString[0], length);
-
-		return wideString;
 	}
 
 	void deleteFile(std::string& filename) {
@@ -297,7 +296,6 @@ public:
 		HANDLE hFind = FindFirstFile(wstrRelativePath.c_str(), &fileData);
 
 		std::stringstream filenames;
-		//std::vector<std::string> folders;
 
 		if (hFind != INVALID_HANDLE_VALUE) {
 
@@ -316,10 +314,18 @@ public:
 		send(clientSocket, buffer.data(), buffer.size(), 0);
 	}
 
-	void recieveData(FileManager& fileManager) {
+	void handleClient(SOCKET clientSocket, FileManager& fileManager, Server& server) {
+
+		while (true) {
+
+			recieveData(fileManager, server);
+		}
+	}
+
+	static void recieveData(FileManager& fileManager, Server& server) {
 
 		std::vector<char> buffer(1024, 0);
-		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
+		int bytesReceived = recv(server.getClientSocket(), buffer.data(), buffer.size(), 0);
 		if (bytesReceived > 0)
 		{
 			std::cout << "\nuser >>> " << buffer.data() << '\n';
@@ -331,23 +337,27 @@ public:
 
 			if (commandType == "GET") {
 
-				getFile(fileManager, filename);
+				server.getFile(fileManager, filename);
 			}
 			else if (commandType == "PUT") {
 
-				putFile(fileManager, filename);
+				server.putFile(fileManager, filename);
 			}
 			else if (commandType == "DELETE") {
 
-				deleteFile(filename);
+				server.deleteFile(filename);
 			}
 			else if (commandType == "INFO") {
 
-				viewFileInfo(filename);
+				server.viewFileInfo(filename);
 			}
 			else if (commandType == "LIST") {
 
-				viewListInfo(filename);
+				server.viewListInfo(filename);
+			}
+			else if (commandType == "USER") {
+
+				server.processUser(filename);
 			}
 			else {
 
@@ -370,14 +380,87 @@ public:
 		WSACleanup();
 	}
 
+	void runServer(FileManager& fileManager) {
+
+		setupAndConnect();
+
+		while (true) {
+
+			SOCKET clientSocket = acceptConnection();
+
+			if (clientSocket != INVALID_SOCKET) {
+
+				threads.emplace_back(handleClient, clientSocket, fileManager);
+			}
+		}
+
+	}
+
 private:
 	WSADATA wsaData;
 	int port = 12345;
 	SOCKET serverSocket;
 	SOCKET clientSocket;
 	sockaddr_in serverAddr;
+
+	std::vector<std::thread> threads;
+	std::vector<std::string> users;
+	std::string userFolderPath;
+
+
+	void processUser(std::string& username) {
+
+		if (std::find(users.begin(), users.end(), username) == users.end()) {
+
+			users.push_back(username);
+			std::cout << "\nNew user created: " << username << '\n';
+			createUserDirectory(username);
+			
+			const char* response = "\nUser folder created.\n";
+			send(clientSocket, response, (int)strlen(response), 0);
+		}
+		else {
+			
+			userFolderPath = username + "\\";
+			std::cout << "\nRelative path set to: " << userFolderPath << '\n';
+
+			const char* response = "\nUser recognised.\n";
+			send(clientSocket, response, (int)strlen(response), 0);
+		}
+	}
+
+	void createUserDirectory(std::string& username) {
+
+		std::string userDirPath = "serverstorage\\" + username;
+		std::wstring wstrUserDirPath = toWideString(userDirPath);
+
+		auto result = CreateDirectory(wstrUserDirPath.c_str(), NULL);
+
+		if (result == ERROR_ALREADY_EXISTS) {
+
+			std::cerr << "\n\nError: the directory already exists.\n\n";
+			return;
+		}
+		else if (result == ERROR_PATH_NOT_FOUND) {
+
+			std::cerr << "\n\nError: specified path not found.\n\n";
+			return;
+		}
+
+		std::cout << "\nUser folder created for: " << username << '\n';
+	}
+
+	std::wstring toWideString(std::string& string) {
+
+		int length = MultiByteToWideChar(CP_ACP, 0, string.c_str(), -1, NULL, 0);
+		std::wstring wideString(length, L'\0');
+		MultiByteToWideChar(CP_ACP, 0, string.c_str(), -1, &wideString[0], length);
+
+		return wideString;
+	}
 };
 
+/*
 class Program {
 public:
 
@@ -385,20 +468,29 @@ public:
 
 		while (true) {
 
-			server.recieveData(fileManager);
+			SOCKET clientSocket = server.acceptConnection();
+
+			if (clientSocket != INVALID_SOCKET) {
+
+				threads.emplace_back(&server.handleClient, clientSocket, &fileManager, &server);
+			}
 		}
 	}
-};
+
+private:
+	std::vector<std::thread> threads;
+};*/
 
 int main()
 {
 	Server server;
 	FileManager fileManager;
-	Program program;
+	//Program program;
 
-	server.setupAndConnect();
+	server.runServer(fileManager);
+	//server.setupAndConnect();
 
-	program.runCommLoop(server, fileManager);
+	//program.runCommLoop(server, fileManager);
 
 	return 0;
 }

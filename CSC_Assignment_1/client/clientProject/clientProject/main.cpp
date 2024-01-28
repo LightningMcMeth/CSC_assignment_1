@@ -8,7 +8,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-class FileManager {	//C:\\Users\\markh\\OneDrive\\Documents\Gamer repositories\CSC_ASSIGNMENTS\CSC_assignment_1\CSC_Assignment_1\client\clientProject\clientProject\clientfiles
+class FileManager {
 public:
 
 	std::vector<char> readFile(std::string& filename) {
@@ -95,6 +95,18 @@ public:
 
 	}
 
+	void connectToServer() {
+
+		if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
+		{
+			std::cerr << "Connect failed with error: " << WSAGetLastError() << '\n';
+			closesocket(clientSocket);
+			WSACleanup();
+
+			return;
+		}
+	}
+
 
 	void sendArgs(const char* message) {
 
@@ -124,7 +136,7 @@ public:
 
 		std::streamsize bufferSize;
 		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
-		if (bytesReceived == 0) {	//it always sends 8 bytes. I haven't figured out why yet.
+		if (bytesReceived == 0) {
 
 			std::cerr << "\nError getting file.\n";
 			return;
@@ -153,7 +165,7 @@ public:
 
 	void recieveFileInfo() {
 
-		std::vector<char> buffer(256, 0); //really don't think I need a bigger buffer here, it's just info about a file.
+		std::vector<char> buffer(256, 0);
 
 		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
 		if (bytesReceived > 0) {
@@ -259,5 +271,3 @@ int main()
 
 	return 0;
 }
-
-//const char* response = UI.processInput().c_str();   <--- this line creates a dangling pointer error. Why???
