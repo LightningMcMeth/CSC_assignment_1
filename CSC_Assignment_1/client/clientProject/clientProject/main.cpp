@@ -213,6 +213,10 @@ public:
 
 	void runCommLoop(ClientServer& server, FileManager& fileManager) {
 
+		std::cout << "\nEnter username: ";
+		std::cin >> name;
+		server.sendArgs(name.c_str());
+
 		while (true) {
 
 			std::cout << "\nCMD >>>: ";
@@ -222,7 +226,6 @@ public:
 			std::cout << "\nPATH >>>: ";
 			std::cin >> filename;
 
-			//server.connectToServer();
 			std::string userMsg = commandType + " " + filename;
 			const char* response = userMsg.c_str();
 
@@ -258,6 +261,7 @@ public:
 private:
 	std::string commandType;
 	std::string filename;
+	std::string name;
 };
 
 int main()
