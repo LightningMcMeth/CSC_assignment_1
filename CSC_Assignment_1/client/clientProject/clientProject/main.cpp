@@ -222,6 +222,7 @@ public:
 			std::cout << "\nPATH >>>: ";
 			std::cin >> filename;
 
+			//server.connectToServer();
 			std::string userMsg = commandType + " " + filename;
 			const char* response = userMsg.c_str();
 

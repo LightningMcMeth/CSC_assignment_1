@@ -133,7 +133,7 @@ public:
 		initializeServer();
 		bindServer();
 		listenToConnections();
-		acceptConnection();
+		//acceptConnection();
 	}
 
 	SOCKET& getClientSocket() {
@@ -141,7 +141,7 @@ public:
 	}
 
 
-	void getFile(FileManager& fileManager, std::string& filename) {
+	void getFile(FileManager& fileManager, std::string& filename, SOCKET clientSocket) {
 
 		const std::vector<char> fileData = fileManager.readFile(filename);
 
@@ -157,7 +157,7 @@ public:
 		send(clientSocket, fileData.data(), (int)bufferSize, 0);
 	}
 
-	void putFile(FileManager& fileManager, std::string& filename) {
+	void putFile(FileManager& fileManager, std::string& filename, SOCKET clientSocket) {
 
 		std::streamsize bufferSize;
 		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
@@ -188,7 +188,7 @@ public:
 		}
 	}
 
-	void deleteFile(std::string& filename) {
+	void deleteFile(std::string& filename, SOCKET clientSocket) {
 
 
 		std::string relativePath = "serverstorage\\" + filename;
@@ -212,7 +212,7 @@ public:
 		}
 	}
 
-	void viewFileInfo(std::string& filename) {
+	void viewFileInfo(std::string& filename, SOCKET clientSocket) {
 
 		BY_HANDLE_FILE_INFORMATION fileInfo = {};
 		const char* errorMsg = "\nError handling file.\n";
@@ -278,7 +278,7 @@ public:
 		send(clientSocket, buffer.data(), buffer.size(), 0);
 	}
 
-	void viewListInfo(std::string& dirname) {
+	void viewListInfo(std::string& dirname, SOCKET clientSocket) {
 
 		WIN32_FIND_DATA fileData;
 		std::string relativePath;
@@ -314,18 +314,18 @@ public:
 		send(clientSocket, buffer.data(), buffer.size(), 0);
 	}
 
-	void handleClient(SOCKET clientSocket, FileManager& fileManager, Server& server) {
+	void handleClient(SOCKET clientSocket, FileManager& fileManager) {
 
 		while (true) {
 
-			recieveData(fileManager, server);
+			//recieveData(fileManager, server, clientSocket);
 		}
 	}
 
-	static void recieveData(FileManager& fileManager, Server& server) {
+	void recieveData(FileManager& fileManager, SOCKET clientSocket) {
 
 		std::vector<char> buffer(1024, 0);
-		int bytesReceived = recv(server.getClientSocket(), buffer.data(), buffer.size(), 0);
+		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
 		if (bytesReceived > 0)
 		{
 			std::cout << "\nuser >>> " << buffer.data() << '\n';
@@ -337,27 +337,27 @@ public:
 
 			if (commandType == "GET") {
 
-				server.getFile(fileManager, filename);
+				getFile(fileManager, filename, clientSocket);
 			}
 			else if (commandType == "PUT") {
 
-				server.putFile(fileManager, filename);
+				putFile(fileManager, filename, clientSocket);
 			}
 			else if (commandType == "DELETE") {
 
-				server.deleteFile(filename);
+				deleteFile(filename, clientSocket);
 			}
 			else if (commandType == "INFO") {
 
-				server.viewFileInfo(filename);
+				viewFileInfo(filename, clientSocket);
 			}
 			else if (commandType == "LIST") {
 
-				server.viewListInfo(filename);
+				viewListInfo(filename, clientSocket);
 			}
 			else if (commandType == "USER") {
 
-				server.processUser(filename);
+				//server.processUser(filename, clientSocket);
 			}
 			else {
 
@@ -390,7 +390,7 @@ public:
 
 			if (clientSocket != INVALID_SOCKET) {
 
-				threads.emplace_back(handleClient, clientSocket, fileManager);
+				//threads.emplace_back(handleClient, clientSocket, fileManager, this);
 			}
 		}
 
@@ -403,11 +403,10 @@ private:
 	SOCKET clientSocket;
 	sockaddr_in serverAddr;
 
-	std::vector<std::thread> threads;
 	std::vector<std::string> users;
 	std::string userFolderPath;
 
-
+	/*
 	void processUser(std::string& username) {
 
 		if (std::find(users.begin(), users.end(), username) == users.end()) {
@@ -427,7 +426,7 @@ private:
 			const char* response = "\nUser recognised.\n";
 			send(clientSocket, response, (int)strlen(response), 0);
 		}
-	}
+	}*/
 
 	void createUserDirectory(std::string& username) {
 
@@ -460,37 +459,50 @@ private:
 	}
 };
 
-/*
+
+void handleClient(SOCKET clientSocket, FileManager fileManager, Server* server) {
+
+	while (true) {
+
+		server->recieveData(fileManager, clientSocket);
+	}
+}
+
 class Program {
 public:
 
 	void runCommLoop(Server& server, FileManager& fileManager) {
 
 		while (true) {
+			std::cout << "\nI hve brain damage\n";
 
 			SOCKET clientSocket = server.acceptConnection();
+			std::cout << "\ngamer\n";
 
 			if (clientSocket != INVALID_SOCKET) {
 
-				threads.emplace_back(&server.handleClient, clientSocket, &fileManager, &server);
+				std::cout << "\ngaming\n";
+				threads.emplace_back(handleClient, clientSocket, std::ref(fileManager), &server);
 			}
 		}
 	}
 
 private:
 	std::vector<std::thread> threads;
-};*/
+};
+
+Server server;
 
 int main()
 {
-	Server server;
+	//Server server;
 	FileManager fileManager;
-	//Program program;
+	Program program;
 
-	server.runServer(fileManager);
-	//server.setupAndConnect();
+	//server.runServer(fileManager);
+	server.setupAndConnect();
 
-	//program.runCommLoop(server, fileManager);
+	program.runCommLoop(server, fileManager);
 
 	return 0;
 }
