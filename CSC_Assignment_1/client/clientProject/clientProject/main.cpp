@@ -219,11 +219,11 @@ public:
 
 		while (true) {
 
-			std::cout << "\nCMD >>>: ";
+			std::cout << "\nCMD \033[36m>>>\033[0m:";
 			std::cin >> commandType;
 
 			std::cin.ignore();
-			std::cout << "\nPATH >>>: ";
+			std::cout << "\nPATH \033[36m>>>\033[0m:";
 			std::cin >> filename;
 
 			std::string userMsg = commandType + " " + filename;

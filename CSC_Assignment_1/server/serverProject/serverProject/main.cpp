@@ -147,7 +147,7 @@ public:
 
 		if (WSAGetLastError() != 0) {
 
-			std::cerr << "\nError getting file.\n";
+			std::cerr << "\n\033[31mError getting file.\033[0m\n";
 			return;
 		}
 
@@ -161,7 +161,7 @@ public:
 		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
 		if (bytesReceived == 0) {
 
-			const char* response = "\nError creating file.\n";
+			const char* response = "\n\033[31mError creating file.\033[0m\n";
 			send(clientSocket, response, (int)strlen(response), 0);
 
 			return;
@@ -181,7 +181,7 @@ public:
 		}
 		else {
 
-			const char* response = "\nError creating file.\n";
+			const char* response = "\n\033[31mError creating file.\033[0m\n";
 			send(clientSocket, response, (int)strlen(response), 0);
 		}
 	}
@@ -204,7 +204,7 @@ public:
 		}
 		else {
 
-			const char* response = "\nError deleting file.\n";
+			const char* response = "\n\033[31mError deleting file.\033[0m\n";
 
 			send(clientSocket, response, (int)strlen(response), 0);
 		}
@@ -224,13 +224,13 @@ public:
 		if (fileHandle == INVALID_HANDLE_VALUE) {
 
 			errCode = GetLastError();
-			std::cerr << "File handle err code: " << errCode << '\n';
+			std::cerr << "\033[31mFile handle err code: " << errCode << "\033[0m\n";
 		}
 
 		if (!GetFileInformationByHandle(fileHandle, &fileInfo)) {
 
 			errCode = GetLastError();
-			std::cerr << "Retrieving file info err code: " << errCode << '\n';
+			std::cerr << "\033[31mRetrieving file info err code: " << errCode << "\033[0m\n";
 		}
 
 		if (errCode != 0) {
@@ -321,7 +321,7 @@ public:
 		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
 		if (bytesReceived > 0)
 		{
-			std::cout << '\n' << username << " >>> " << buffer.data() << '\n';
+			std::cout << '\n' << username << "\033[36m >>> \033[0m" << buffer.data() << '\n';
 
 			std::stringstream arguments(buffer.data());
 			std::string commandType, filename;
@@ -392,12 +392,12 @@ public:
 
 		if (result == ERROR_ALREADY_EXISTS) {
 
-			std::cerr << "\n\nError: the directory already exists.\n\n";
+			std::cerr << "\n\n\033[31mError: the directory already exists.\033[0m\n\n";
 			return;
 		}
 		else if (result == ERROR_PATH_NOT_FOUND) {
 
-			std::cerr << "\n\nError: specified path not found.\n\n";
+			std::cerr << "\n\n\033[31mError: specified path not found.\033[0m\n\n";
 			return;
 		}
 
@@ -446,7 +446,7 @@ public:
 
 			if (clientSocket != INVALID_SOCKET) {
 
-				std::cout << "\n>>> New connection accepted <<<\n";
+				std::cout << "\n\033[32m>>> New connection accepted <<<\033[0m\n";
 				threads.emplace_back(Program::handleClient, clientSocket, std::ref(fileManager), &server);
 			}
 		}
