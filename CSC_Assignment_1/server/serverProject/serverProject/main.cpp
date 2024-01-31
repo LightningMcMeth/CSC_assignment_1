@@ -19,7 +19,7 @@ public:
 
 		if (!file.is_open()) {
 
-			std::cerr << "\n\n!!!Error opening file!!!\n\n";
+			std::cerr << "\n\n\033[31m!!!Error opening file!!!\033[0m\n\n";
 
 			std::vector<char> empty;
 			return empty;
@@ -283,11 +283,11 @@ public:
 		WIN32_FIND_DATA fileData;
 		std::string relativePath;
 
-		if (dirname == "-" || dirname == "root") {
+		if (dirname == "root") {
 
 			relativePath = "serverstorage\\*";
 		}
-		else {
+		else if(dirname == "-") {
 			relativePath = "serverstorage\\" + username + "\\*";
 		}
 

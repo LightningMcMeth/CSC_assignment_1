@@ -18,7 +18,7 @@ public:
 
 		if (!file.is_open()) {
 
-			std::cerr << "\n\n!!!Error opening file!!!\n\n";
+			std::cerr << "\n\n\033[31m!!!Error opening file!!!\033[0m\n\n";
 
 			std::vector<char> empty;
 			return empty;
@@ -136,7 +136,7 @@ public:
 
 		std::streamsize bufferSize;
 		int bytesReceived = recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
-		if (bytesReceived == 0) {
+		if (bytesReceived <= 8) {	//you should always recieve 8 bytes. If I start getting weird errors it's probably because of this check
 
 			std::cerr << "\nError getting file.\n";
 			return;
