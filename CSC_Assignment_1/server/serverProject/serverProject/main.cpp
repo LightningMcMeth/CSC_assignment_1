@@ -6,53 +6,13 @@
 #include <string>
 #include <WinSock2.h>
 #include <thread>
+#include <mutex>
+
+#include "../../src/FileManager.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
-class FileManager {
-public:
-
-	std::vector<char> readFile(std::string& filename) {
-
-		std::string relativePath = "serverstorage\\" + filename;
-		std::ifstream file(relativePath, std::ios::binary);
-
-		if (!file.is_open()) {
-
-			std::cerr << "\n\n\033[31m!!!Error opening file!!!\033[0m\n\n";
-
-			std::vector<char> empty;
-			return empty;
-		}
-
-		file.seekg(0, std::ios::end);
-		bufferSize = file.tellg();
-		file.seekg(0, std::ios::beg);
-
-		std::vector<char> buffer(bufferSize, 0);
-
-		file.read(buffer.data(), bufferSize);
-		file.close();
-
-		return buffer;
-	}
-
-	const std::streamsize getBufferSize() {
-		return bufferSize;
-	}
-
-	void writeFile(std::string& filename, std::vector<char>& buffer, int bufferSize) {
-
-		std::string relativePath = "serverstorage\\" + filename;
-		std::ofstream file(relativePath, std::ios::binary);
-
-		file.write(buffer.data(), bufferSize);
-	}
-
-private:
-	std::streamsize bufferSize;
-};
-
+std::mutex mtx;
 
 class Server {
 public:
@@ -137,7 +97,7 @@ public:
 		//acceptConnection();
 	}
 
-
+	/*
 	void getFile(FileManager& fileManager, std::string& filename, SOCKET clientSocket, std::string& userpath) {
 
 		const std::vector<char> fileData = fileManager.readFile(userpath);
@@ -147,14 +107,87 @@ public:
 
 		if (WSAGetLastError() != 0) {
 
+			mtx.lock();
 			std::cerr << "\n\033[31mError getting file.\033[0m\n";
+			mtx.unlock();
 			return;
 		}
 
 		send(clientSocket, fileData.data(), (int)bufferSize, 0);
+	}*/
+
+	//chunk logic in this method
+	void getFile(SOCKET clientSocket, std::string& userpath) {
+		
+		std::string relativePath = "serverstorage\\" + userpath;
+		std::ifstream file(relativePath, std::ios::binary);
+		if (!file.is_open()) {
+			std::cerr << "\n\n\033[31m!!!Error opening file!!!\033[0m\n\n";
+			return;
+		}
+
+		file.seekg(0, std::ios::end);
+		std::streamsize fileSize = file.tellg();
+		file.seekg(0, std::ios::beg);
+
+
+		send(clientSocket, (char*)&fileSize, sizeof(std::streamsize), 0);
+
+		std::streamsize bufferSize = 4196;
+		send(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+
+		std::streamsize lastChunk = fileSize % bufferSize;
+		std::vector<char> buffer(bufferSize, 0);
+		std::streamsize totalSentSize = 0;
+
+		while (totalSentSize < fileSize)
+		{
+			std::streamsize remainingSize = fileSize - totalSentSize;
+			std::streamsize currentChunkSize = (remainingSize < bufferSize) ? remainingSize : lastChunk;
+			//std::streamsize currentChunkSize = min(remainingSize, bufferSize);
+
+			file.read(buffer.data(), currentChunkSize);
+			int bytesSent = send(clientSocket, buffer.data(), (int)currentChunkSize, 0);
+			if (bytesSent == SOCKET_ERROR) {
+
+				std::cerr << "\n\nMajor bruh moment right here\n\n";
+			}
+
+			totalSentSize += bytesSent;
+		}
+
+		file.close();
 	}
 
+	void putFile(std::string& userpath) {
+		
+		std::streamsize fileSize;
+		recv(clientSocket, (char*)&fileSize, sizeof(std::streamsize), 0);
 
+		std::streamsize bufferSize;
+		recv(clientSocket, (char*)&bufferSize, sizeof(std::streamsize), 0);
+
+		std::string relativePath = "serverstorage\\" + userpath;
+		std::ofstream file(relativePath, std::ios::binary);
+
+		std::vector<char> buffer(bufferSize, 0);
+		std::streamsize totalReceivedSize = 0;
+		while (totalReceivedSize < fileSize) {
+
+			std::streamsize bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
+			if (bytesReceived <= 0) {
+				std::cerr << "\n\nMajor bruh moment right here\n\n";
+			}
+			file.write(buffer.data(), bytesReceived);
+
+			totalReceivedSize += bytesReceived;
+		}
+
+		file.close();
+
+	}
+
+	/*
 	void putFile(FileManager& fileManager, std::string& filename, SOCKET clientSocket, std::string& userpath) {
 
 		std::streamsize bufferSize;
@@ -184,7 +217,7 @@ public:
 			const char* response = "\n\033[31mError creating file.\033[0m\n";
 			send(clientSocket, response, (int)strlen(response), 0);
 		}
-	}
+	}*/
 
 
 	void deleteFile(std::string& filename, SOCKET clientSocket, std::string& userpath) {
@@ -195,7 +228,9 @@ public:
 		bool isDeleted = DeleteFile(wstrRelativePath.c_str());
 		if (isDeleted) {
 
+			mtx.lock();
 			std::cout << "\nFile deleted successfully.\n";
+			mtx.unlock();
 
 			std::string strResponse = "\nFile " + filename + " deleted.\n";
 			auto response = strResponse.c_str();
@@ -224,13 +259,19 @@ public:
 		if (fileHandle == INVALID_HANDLE_VALUE) {
 
 			errCode = GetLastError();
+
+			mtx.lock();
 			std::cerr << "\033[31mFile handle err code: " << errCode << "\033[0m\n";
+			mtx.unlock();
 		}
 
 		if (!GetFileInformationByHandle(fileHandle, &fileInfo)) {
 
 			errCode = GetLastError();
+
+			mtx.lock();
 			std::cerr << "\033[31mRetrieving file info err code: " << errCode << "\033[0m\n";
+			mtx.unlock();
 		}
 
 		if (errCode != 0) {
@@ -288,6 +329,7 @@ public:
 			relativePath = "serverstorage\\*";
 		}
 		else if(dirname == "-") {
+
 			relativePath = "serverstorage\\" + username + "\\*";
 		}
 
@@ -321,7 +363,9 @@ public:
 		int bytesReceived = recv(clientSocket, buffer.data(), buffer.size(), 0);
 		if (bytesReceived > 0)
 		{
+			mtx.lock();
 			std::cout << '\n' << username << "\033[36m >>> \033[0m" << buffer.data() << '\n';
+			mtx.unlock();
 
 			std::stringstream arguments(buffer.data());
 			std::string commandType, filename;
@@ -337,12 +381,12 @@ public:
 
 			if (commandType == "GET") {
 
-				getFile(fileManager, filename, clientSocket, userpath);
+				getFile(clientSocket, userpath);
 				return true;
 			}
 			else if (commandType == "PUT") {
 
-				putFile(fileManager, filename, clientSocket, userpath);
+				putFile(userpath);
 				return true;
 			}
 			else if (commandType == "DELETE") {
@@ -366,7 +410,9 @@ public:
 			}
 			else {
 
+				mtx.lock();
 				std::cerr << "\nCommand not recognised.\n";
+				mtx.unlock();
 			}
 		}
 
@@ -392,12 +438,18 @@ public:
 
 		if (result == ERROR_ALREADY_EXISTS) {
 
+			mtx.lock();
 			std::cerr << "\n\n\033[31mError: the directory already exists.\033[0m\n\n";
+			mtx.unlock();
+
 			return;
 		}
 		else if (result == ERROR_PATH_NOT_FOUND) {
 
+			mtx.lock();
 			std::cerr << "\n\n\033[31mError: specified path not found.\033[0m\n\n";
+			mtx.unlock();
+
 			return;
 		}
 
@@ -446,7 +498,10 @@ public:
 
 			if (clientSocket != INVALID_SOCKET) {
 
+				mtx.lock();
 				std::cout << "\n\033[32m>>> New connection accepted <<<\033[0m\n";
+				mtx.unlock();
+
 				threads.emplace_back(Program::handleClient, clientSocket, std::ref(fileManager), &server);
 			}
 		}
