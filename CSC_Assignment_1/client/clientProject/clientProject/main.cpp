@@ -166,7 +166,6 @@ public:
 		{
 			std::streamsize remainingSize = fileSize - totalSentSize;
 			std::streamsize currentChunkSize = (remainingSize < bufferSize) ? remainingSize : lastChunk;
-			//std::streamsize currentChunkSize = min(remainingSize, bufferSize);
 
 			file.read(buffer.data(), currentChunkSize);
 			int bytesSent = send(clientSocket, buffer.data(), (int)currentChunkSize, 0);
